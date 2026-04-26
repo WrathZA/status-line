@@ -30,6 +30,7 @@ PURPLE='\033[35m'
 GREEN='\033[32m'
 YELLOW='\033[33m'
 RED='\033[31m'
+BLUE='\033[34m'
 RESET='\033[0m'
 
 branch=""
@@ -44,6 +45,43 @@ if [ -n "$cwd" ] && git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
   ahead_count=$(git -C "$cwd" rev-list --no-walk=unsorted --count "origin/HEAD..HEAD" 2>/dev/null)
   if [ -n "$ahead_count" ] && [ "$ahead_count" -gt 0 ] 2>/dev/null; then
     ahead="+${ahead_count}"
+  fi
+fi
+
+gh_block=""
+if [ -n "$cwd" ] && command -v gh > /dev/null 2>&1; then
+  repo_json=$(cd "$cwd" && gh repo view --json nameWithOwner 2>/dev/null)
+  if [ -n "$repo_json" ]; then
+    nwo=$(echo "$repo_json" | jq -r '.nameWithOwner')
+    owner=$(echo "$nwo" | cut -d'/' -f1)
+    repo=$(echo "$nwo" | cut -d'/' -f2)
+    gql=$(gh api graphql -F owner="$owner" -F repo="$repo" \
+      -f query='query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){openIssues:issues(states:OPEN){totalCount}closedIssues:issues(states:CLOSED){totalCount}p0:issues(states:OPEN,labels:["P0"]){totalCount}p1:issues(states:OPEN,labels:["P1"]){totalCount}p2:issues(states:OPEN,labels:["P2"]){totalCount}openPRs:pullRequests(states:OPEN,first:100){totalCount nodes{isDraft}}}}' 2>/dev/null)
+    if [ -n "$gql" ]; then
+      open_i=$(echo "$gql" | jq -r '.data.repository.openIssues.totalCount')
+      closed_i=$(echo "$gql" | jq -r '.data.repository.closedIssues.totalCount')
+      p0=$(echo "$gql" | jq -r '.data.repository.p0.totalCount')
+      p1=$(echo "$gql" | jq -r '.data.repository.p1.totalCount')
+      p2=$(echo "$gql" | jq -r '.data.repository.p2.totalCount')
+      open_prs=$(echo "$gql" | jq -r '.data.repository.openPRs.totalCount')
+      draft_prs=$(echo "$gql" | jq -r '[.data.repository.openPRs.nodes[]|select(.isDraft==true)]|length')
+      issue_str="${open_i} open / ${closed_i} closed"
+      prio=""
+      [ "$p0" -gt 0 ] 2>/dev/null && prio="${prio}P0:${p0} "
+      [ "$p1" -gt 0 ] 2>/dev/null && prio="${prio}P1:${p1} "
+      [ "$p2" -gt 0 ] 2>/dev/null && prio="${prio}P2:${p2} "
+      prio="${prio% }"
+      if [ "$draft_prs" -gt 0 ] 2>/dev/null; then
+        pr_str="${open_prs} PRs (${draft_prs} draft)"
+      else
+        pr_str="${open_prs} PRs"
+      fi
+      if [ -n "$prio" ]; then
+        gh_block="${issue_str} | ${prio} | ${pr_str}"
+      else
+        gh_block="${issue_str} | ${pr_str}"
+      fi
+    fi
   fi
 fi
 
@@ -70,6 +108,10 @@ if [ -n "$used" ]; then
     ctx_color="$GREEN"
   fi
   status="${status}${ctx_color}ctx:${pct}%${RESET}"
+fi
+if [ -n "$gh_block" ]; then
+  [ -n "$status" ] && status="${status} "
+  status="${status}${BLUE}gh:${gh_block}${RESET}"
 fi
 
 printf "%b" "$status"

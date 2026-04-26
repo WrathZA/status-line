@@ -35,16 +35,15 @@ RESET='\033[0m'
 
 branch=""
 ahead=""
+dirty=""
 if [ -n "$cwd" ] && git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
-  raw_branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null)
-  if [ "$raw_branch" = "main" ]; then
-    branch="engine"
-  else
-    branch="${raw_branch#project/}"
-  fi
+  branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null)
   ahead_count=$(git -C "$cwd" rev-list --no-walk=unsorted --count "origin/HEAD..HEAD" 2>/dev/null)
   if [ -n "$ahead_count" ] && [ "$ahead_count" -gt 0 ] 2>/dev/null; then
     ahead="+${ahead_count}"
+  fi
+  if [ -n "$(git -C "$cwd" status --porcelain 2>/dev/null)" ]; then
+    dirty="*"
   fi
 fi
 
@@ -87,8 +86,12 @@ fi
 
 status=""
 if [ -n "$branch" ]; then
-  if [ -n "$ahead" ]; then
+  if [ -n "$ahead" ] && [ -n "$dirty" ]; then
+    status="${CYAN}(${branch}${YELLOW}${dirty} ${ahead}${CYAN})${RESET}"
+  elif [ -n "$ahead" ]; then
     status="${CYAN}(${branch} ${YELLOW}${ahead}${CYAN})${RESET}"
+  elif [ -n "$dirty" ]; then
+    status="${CYAN}(${branch}${YELLOW}${dirty}${CYAN})${RESET}"
   else
     status="${CYAN}(${branch})${RESET}"
   fi

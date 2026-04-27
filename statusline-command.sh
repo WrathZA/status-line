@@ -35,12 +35,16 @@ RESET='\033[0m'
 
 branch=""
 ahead=""
+behind=""
 dirty=""
 if [ -n "$cwd" ] && git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
   branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null)
-  ahead_count=$(git -C "$cwd" rev-list --no-walk=unsorted --count "origin/HEAD..HEAD" 2>/dev/null)
-  if [ -n "$ahead_count" ] && [ "$ahead_count" -gt 0 ] 2>/dev/null; then
-    ahead="+${ahead_count}"
+  counts=$(git -C "$cwd" rev-list --count --left-right "@{u}...HEAD" 2>/dev/null)
+  if [ -n "$counts" ]; then
+    behind_count=$(echo "$counts" | awk '{print $1}')
+    ahead_count=$(echo "$counts" | awk '{print $2}')
+    [ "$ahead_count" -gt 0 ] 2>/dev/null && ahead="↑${ahead_count}"
+    [ "$behind_count" -gt 0 ] 2>/dev/null && behind="↓${behind_count}"
   fi
   if [ -n "$(git -C "$cwd" status --porcelain 2>/dev/null)" ]; then
     dirty="*"
@@ -85,15 +89,18 @@ if [ -n "$cwd" ] && command -v gh > /dev/null 2>&1; then
 fi
 
 status=""
+if [ -n "$cwd" ]; then
+  status="${BLUE}${cwd}${RESET}"
+fi
 if [ -n "$branch" ]; then
-  if [ -n "$ahead" ] && [ -n "$dirty" ]; then
-    status="${CYAN}(${branch}${YELLOW}${dirty} ${ahead}${CYAN})${RESET}"
-  elif [ -n "$ahead" ]; then
-    status="${CYAN}(${branch} ${YELLOW}${ahead}${CYAN})${RESET}"
-  elif [ -n "$dirty" ]; then
-    status="${CYAN}(${branch}${YELLOW}${dirty}${CYAN})${RESET}"
+  [ -n "$status" ] && status="${status} "
+  sync=""
+  [ -n "$ahead" ] && sync="${sync} ${ahead}"
+  [ -n "$behind" ] && sync="${sync} ${behind}"
+  if [ -n "$dirty" ] || [ -n "$sync" ]; then
+    status="${status}${CYAN}(${branch}${YELLOW}${dirty}${sync}${CYAN})${RESET}"
   else
-    status="${CYAN}(${branch})${RESET}"
+    status="${status}${CYAN}(${branch})${RESET}"
   fi
 fi
 if [ -n "$model" ]; then
@@ -110,11 +117,11 @@ if [ -n "$used" ]; then
   else
     ctx_color="$GREEN"
   fi
-  status="${status}${ctx_color}ctx:${pct}%${RESET}"
+  status="${status}${ctx_color}ctx: ${pct}%${RESET}"
 fi
 if [ -n "$gh_block" ]; then
   [ -n "$status" ] && status="${status} "
-  status="${status}${BLUE}gh:${gh_block}${RESET}"
+  status="${status}${BLUE}gh: ${gh_block}${RESET}"
 fi
 
 printf "%b" "$status"

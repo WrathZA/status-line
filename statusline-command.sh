@@ -93,14 +93,14 @@ if [ -n "$cwd" ]; then
   status="${BLUE}$(basename "$cwd")${RESET}"
 fi
 if [ -n "$branch" ]; then
-  if [ -n "$ahead" ] && [ -n "$dirty" ]; then
-    status="${CYAN}(${branch}${YELLOW}${dirty} ${ahead}${CYAN})${RESET}"
-  elif [ -n "$ahead" ]; then
-    status="${CYAN}(${branch} ${YELLOW}${ahead}${CYAN})${RESET}"
-  elif [ -n "$dirty" ]; then
-    status="${CYAN}(${branch}${YELLOW}${dirty}${CYAN})${RESET}"
+  [ -n "$status" ] && status="${status} "
+  sync=""
+  [ -n "$ahead" ] && sync="${sync} ${ahead}"
+  [ -n "$behind" ] && sync="${sync} ${behind}"
+  if [ -n "$dirty" ] || [ -n "$sync" ]; then
+    status="${status}${CYAN}(${branch}${YELLOW}${dirty}${sync}${CYAN})${RESET}"
   else
-    status="${CYAN}(${branch})${RESET}"
+    status="${status}${CYAN}(${branch})${RESET}"
   fi
 fi
 if [ -n "$model" ]; then

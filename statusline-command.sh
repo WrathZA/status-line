@@ -85,6 +85,9 @@ if [ -n "$cwd" ] && command -v gh > /dev/null 2>&1; then
 fi
 
 status=""
+if [ -n "$cwd" ]; then
+  status="${BLUE}$(basename "$cwd")${RESET}"
+fi
 if [ -n "$branch" ]; then
   if [ -n "$ahead" ] && [ -n "$dirty" ]; then
     status="${CYAN}(${branch}${YELLOW}${dirty} ${ahead}${CYAN})${RESET}"

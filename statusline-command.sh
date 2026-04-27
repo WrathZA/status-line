@@ -51,39 +51,53 @@ if [ -n "$cwd" ] && git -C "$cwd" rev-parse --git-dir > /dev/null 2>&1; then
   fi
 fi
 
-gh_block=""
+nwo=""
 if [ -n "$cwd" ] && command -v gh > /dev/null 2>&1; then
-  repo_json=$(cd "$cwd" && gh repo view --json nameWithOwner 2>/dev/null)
-  if [ -n "$repo_json" ]; then
-    nwo=$(echo "$repo_json" | jq -r '.nameWithOwner')
-    owner=$(echo "$nwo" | cut -d'/' -f1)
-    repo=$(echo "$nwo" | cut -d'/' -f2)
-    gql=$(gh api graphql -F owner="$owner" -F repo="$repo" \
-      -f query='query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){openIssues:issues(states:OPEN){totalCount}closedIssues:issues(states:CLOSED){totalCount}p0:issues(states:OPEN,labels:["P0"]){totalCount}p1:issues(states:OPEN,labels:["P1"]){totalCount}p2:issues(states:OPEN,labels:["P2"]){totalCount}openPRs:pullRequests(states:OPEN,first:100){totalCount nodes{isDraft}}}}' 2>/dev/null)
-    if [ -n "$gql" ]; then
-      open_i=$(echo "$gql" | jq -r '.data.repository.openIssues.totalCount')
-      closed_i=$(echo "$gql" | jq -r '.data.repository.closedIssues.totalCount')
-      p0=$(echo "$gql" | jq -r '.data.repository.p0.totalCount')
-      p1=$(echo "$gql" | jq -r '.data.repository.p1.totalCount')
-      p2=$(echo "$gql" | jq -r '.data.repository.p2.totalCount')
-      open_prs=$(echo "$gql" | jq -r '.data.repository.openPRs.totalCount')
-      draft_prs=$(echo "$gql" | jq -r '[.data.repository.openPRs.nodes[]|select(.isDraft==true)]|length')
-      issue_str="${open_i} open / ${closed_i} closed"
-      prio=""
-      [ "$p0" -gt 0 ] 2>/dev/null && prio="${prio}P0:${p0} "
-      [ "$p1" -gt 0 ] 2>/dev/null && prio="${prio}P1:${p1} "
-      [ "$p2" -gt 0 ] 2>/dev/null && prio="${prio}P2:${p2} "
-      prio="${prio% }"
-      if [ "$draft_prs" -gt 0 ] 2>/dev/null; then
-        pr_str="${open_prs} PRs (${draft_prs} draft)"
-      else
-        pr_str="${open_prs} PRs"
-      fi
-      if [ -n "$prio" ]; then
-        gh_block="${issue_str} | ${prio} | ${pr_str}"
-      else
-        gh_block="${issue_str} | ${pr_str}"
-      fi
+  nwo=$(cd "$cwd" && gh repo view --json nameWithOwner 2>/dev/null | jq -r '.nameWithOwner // empty')
+fi
+
+issue_link=""
+if [ -n "$nwo" ] && [ -n "$branch" ]; then
+  issue_num=""
+  branch_num=$(echo "$branch" | grep -oE '^([a-z]+/)?(issue-)?[0-9]+' | grep -oE '[0-9]+' | head -1)
+  [ -n "$branch_num" ] && issue_num="$branch_num"
+  pr_issue=$(cd "$cwd" && gh pr view --json closingIssuesReferences 2>/dev/null | jq -r '.closingIssuesReferences[0].number // empty')
+  [ -n "$pr_issue" ] && issue_num="$pr_issue"
+  if [ -n "$issue_num" ]; then
+    issue_url="https://github.com/${nwo}/issues/${issue_num}"
+    issue_link="${BLUE}\033]8;;${issue_url}\a#${issue_num}\033]8;;\a${RESET}"
+  fi
+fi
+
+gh_block=""
+if [ -n "$nwo" ]; then
+  owner=$(echo "$nwo" | cut -d'/' -f1)
+  repo=$(echo "$nwo" | cut -d'/' -f2)
+  gql=$(gh api graphql -F owner="$owner" -F repo="$repo" \
+    -f query='query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){openIssues:issues(states:OPEN){totalCount}closedIssues:issues(states:CLOSED){totalCount}p0:issues(states:OPEN,labels:["P0"]){totalCount}p1:issues(states:OPEN,labels:["P1"]){totalCount}p2:issues(states:OPEN,labels:["P2"]){totalCount}openPRs:pullRequests(states:OPEN,first:100){totalCount nodes{isDraft}}}}' 2>/dev/null)
+  if [ -n "$gql" ]; then
+    open_i=$(echo "$gql" | jq -r '.data.repository.openIssues.totalCount')
+    closed_i=$(echo "$gql" | jq -r '.data.repository.closedIssues.totalCount')
+    p0=$(echo "$gql" | jq -r '.data.repository.p0.totalCount')
+    p1=$(echo "$gql" | jq -r '.data.repository.p1.totalCount')
+    p2=$(echo "$gql" | jq -r '.data.repository.p2.totalCount')
+    open_prs=$(echo "$gql" | jq -r '.data.repository.openPRs.totalCount')
+    draft_prs=$(echo "$gql" | jq -r '[.data.repository.openPRs.nodes[]|select(.isDraft==true)]|length')
+    issue_str="${open_i} open / ${closed_i} closed"
+    prio=""
+    [ "$p0" -gt 0 ] 2>/dev/null && prio="${prio}P0:${p0} "
+    [ "$p1" -gt 0 ] 2>/dev/null && prio="${prio}P1:${p1} "
+    [ "$p2" -gt 0 ] 2>/dev/null && prio="${prio}P2:${p2} "
+    prio="${prio% }"
+    if [ "$draft_prs" -gt 0 ] 2>/dev/null; then
+      pr_str="${open_prs} PRs (${draft_prs} draft)"
+    else
+      pr_str="${open_prs} PRs"
+    fi
+    if [ -n "$prio" ]; then
+      gh_block="${issue_str} | ${prio} | ${pr_str}"
+    else
+      gh_block="${issue_str} | ${pr_str}"
     fi
   fi
 fi
@@ -102,6 +116,10 @@ if [ -n "$branch" ]; then
   else
     status="${status}${CYAN}(${branch})${RESET}"
   fi
+fi
+if [ -n "$issue_link" ]; then
+  [ -n "$status" ] && status="${status} "
+  status="${status}${issue_link}"
 fi
 if [ -n "$model" ]; then
   [ -n "$status" ] && status="${status} "

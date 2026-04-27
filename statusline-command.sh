@@ -121,7 +121,7 @@ if [ -n "$used" ]; then
 fi
 if [ -n "$gh_block" ]; then
   [ -n "$status" ] && status="${status} "
-  status="${status}${BLUE}gh:${gh_block}${RESET}"
+  status="${status}${BLUE}gh: ${gh_block}${RESET}"
 fi
 
 printf "%b" "$status"

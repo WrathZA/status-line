@@ -117,7 +117,7 @@ if [ -n "$used" ]; then
   else
     ctx_color="$GREEN"
   fi
-  status="${status}${ctx_color}ctx:${pct}%${RESET}"
+  status="${status}${ctx_color}ctx: ${pct}%${RESET}"
 fi
 if [ -n "$gh_block" ]; then
   [ -n "$status" ] && status="${status} "

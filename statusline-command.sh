@@ -90,7 +90,7 @@ fi
 
 status=""
 if [ -n "$cwd" ]; then
-  status="${BLUE}$(basename "$cwd")${RESET}"
+  status="${BLUE}${cwd}${RESET}"
 fi
 if [ -n "$branch" ]; then
   [ -n "$status" ] && status="${status} "
